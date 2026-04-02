@@ -16,7 +16,7 @@ dependencies:
   app_links: ^3.4.4
   flutter_local_notifications: ^17.0.0
   uuid: ^4.3.3
-  flutter_notification_listener: ^2.6.0
+  flutter_notification_listener: ^1.4.0
 
 dev_dependencies:
   flutter_test:
