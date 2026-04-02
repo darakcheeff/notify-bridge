@@ -22,11 +22,11 @@ String deviceId = const Uuid().v4();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  NotificationsListener.initialize(onData);
+  NotificationsListener.initialize(callbackHandle: onData);
 
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings: initializationSettings);
 
   final prefs = await SharedPreferences.getInstance();
   currentGuid = prefs.getString('guid') ?? "";
@@ -78,10 +78,10 @@ Future<void> _showLocalNotification(String content) async {
   );
   const NotificationDetails notificationDetails = NotificationDetails(android: androidNotificationDetails);
   await flutterLocalNotificationsPlugin.show(
-    0,
-    'Bridge Message',
-    content,
-    notificationDetails,
+    id: 0,
+    title: 'Bridge Message',
+    body: content,
+    notificationDetails: notificationDetails,
   );
 }
 
@@ -264,7 +264,7 @@ class _FiltersTabState extends State<FiltersTab> {
   }
 
   void _loadApps() async {
-    List<AppInfo> apps = await InstalledApps.getInstalledApps(true, true);
+    List<AppInfo> apps = await InstalledApps.getInstalledApps(excludeSystemApps: true, withIcon: true);
     setState(() {
       _installedApps = apps;
     });
