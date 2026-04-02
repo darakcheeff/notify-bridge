@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:device_apps/device_apps.dart';
+import 'package:installed_apps/app_info.dart';
+import 'package:installed_apps/installed_apps.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:uuid/uuid.dart';
@@ -252,7 +253,7 @@ class FiltersTab extends StatefulWidget {
 class _FiltersTabState extends State<FiltersTab> {
   final TextEditingController _whiteListController = TextEditingController();
   final TextEditingController _blackListController = TextEditingController();
-  List<Application> _installedApps = [];
+  List<AppInfo> _installedApps = [];
   
   @override
   void initState() {
@@ -263,7 +264,7 @@ class _FiltersTabState extends State<FiltersTab> {
   }
 
   void _loadApps() async {
-    List<Application> apps = await DeviceApps.getInstalledApplications(includeAppIcons: true, onlyAppsWithLaunchIntent: true);
+    List<AppInfo> apps = await InstalledApps.getInstalledApps(true, true);
     setState(() {
       _installedApps = apps;
     });
@@ -326,13 +327,14 @@ class _FiltersTabState extends State<FiltersTab> {
                     itemCount: _installedApps.length,
                     itemBuilder: (context, index) {
                       final app = _installedApps[index];
-                      final isSelected = filteringEngine.allowedApps.contains(app.packageName);
+                      final pName = app.packageName ?? '';
+                      final isSelected = filteringEngine.allowedApps.contains(pName);
                       return CheckboxListTile(
                         value: isSelected,
-                        onChanged: (val) => _toggleApp(app.packageName, val),
-                        title: Text(app.appName),
-                        subtitle: Text(app.packageName),
-                        secondary: app is ApplicationWithIcon ? Image.memory(app.icon, width: 40, height: 40) : null,
+                        onChanged: (val) => _toggleApp(pName, val),
+                        title: Text(app.name ?? ''),
+                        subtitle: Text(pName),
+                        secondary: app.icon != null ? Image.memory(app.icon!, width: 40, height: 40) : null,
                       );
                     },
                   ),
