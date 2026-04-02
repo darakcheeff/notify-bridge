@@ -50,6 +50,9 @@ Future<void> main() async {
 void onData(NotificationEvent event) async {
   await filteringEngine.loadSettings();
   if (mqttService == null && currentGuid.isNotEmpty) {
+    final prefs = await SharedPreferences.getInstance();
+    serverAddress = prefs.getString('server_address') ?? "10.0.2.2";
+    serverPort = prefs.getInt('server_port') ?? 1883;
     _initMqtt(currentGuid);
   }
 
