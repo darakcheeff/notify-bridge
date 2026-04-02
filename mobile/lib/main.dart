@@ -19,6 +19,8 @@ final FilteringEngine filteringEngine = FilteringEngine();
 MqttService? mqttService;
 String currentGuid = "";
 String deviceId = const Uuid().v4();
+String serverAddress = "10.0.2.2";
+int serverPort = 1883;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,11 +28,13 @@ Future<void> main() async {
 
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
+  await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings, onDidReceiveNotificationResponse: (_) {});
 
   final prefs = await SharedPreferences.getInstance();
   currentGuid = prefs.getString('guid') ?? "";
   deviceId = prefs.getString('device_id') ?? const Uuid().v4();
+  serverAddress = prefs.getString('server_address') ?? "10.0.2.2";
+  serverPort = prefs.getInt('server_port') ?? 1883;
   await prefs.setString('device_id', deviceId);
 
   await filteringEngine.loadSettings();
@@ -86,8 +90,7 @@ Future<void> _showLocalNotification(String content) async {
 }
 
 void _initMqtt(String guid) async {
-  // Use a hardcoded local IP or configuration in production apps
-  mqttService = MqttService(server: "10.0.2.2", port: 1883, deviceId: deviceId);
+  mqttService = MqttService(server: serverAddress, port: serverPort, deviceId: deviceId);
   bool connected = await mqttService!.connect(guid);
   if (!connected) return;
 
@@ -140,20 +143,31 @@ class _MainScreenState extends State<MainScreen> {
     _handleIncomingLinks();
   }
 
-  void _handleIncomingLinks() {
-    _appLinks.uriLinkStream.listen((Uri? uri) async {
-      if (uri != null && uri.scheme == 'bridge' && uri.host == 'join') {
-        final newGuid = uri.queryParameters['guid'];
-        if (newGuid != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('guid', newGuid);
-          currentGuid = newGuid;
-          _initMqtt(newGuid);
-          setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined new group!')));
+  void _handleIncomingLinks() async {
+    // 1. Handle cold start (initial link)
+    final initialUri = await _appLinks.getInitialLink();
+    if (initialUri != null) _processUri(initialUri);
+
+    // 2. Handle stream (incoming when app is open)
+    _appLinks.uriLinkStream.listen((Uri? uri) {
+      if (uri != null) _processUri(uri);
+    });
+  }
+
+  void _processUri(Uri uri) async {
+    if (uri.scheme == 'bridge' && uri.host == 'join') {
+      final newGuid = uri.queryParameters['guid'];
+      if (newGuid != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('guid', newGuid);
+        currentGuid = newGuid;
+        _initMqtt(newGuid);
+        setState(() {});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Присоединились к группе!')));
         }
       }
-    });
+    }
   }
 
   @override
@@ -187,12 +201,26 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
+  final TextEditingController _serverController = TextEditingController();
+  final TextEditingController _portController = TextEditingController();
+  final TextEditingController _guidController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _serverController.text = serverAddress;
+    _portController.text = serverPort.toString();
+    _guidController.text = currentGuid;
+  }
+
   void _createGroup() async {
     final newGuid = const Uuid().v4();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('guid', newGuid);
-    setState(() => currentGuid = newGuid);
+    currentGuid = newGuid;
+    _guidController.text = newGuid;
     _initMqtt(newGuid);
+    setState(() {});
   }
 
   void _testConnection() {
@@ -208,34 +236,106 @@ class _HomeTabState extends State<HomeTab> {
         ),
       );
       mqttService!.publishPacket(packet);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link test sent!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Тест связи отправлен!')));
+    }
+  }
+
+  void _saveServerConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    serverAddress = _serverController.text.trim();
+    serverPort = int.tryParse(_portController.text.trim()) ?? 1883;
+    await prefs.setString('server_address', serverAddress);
+    await prefs.setInt('server_port', serverPort);
+    
+    if (currentGuid.isNotEmpty) {
+      _initMqtt(currentGuid); // Reconnect with new address
+    }
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сервер сохранен')));
+    }
+  }
+
+  void _joinManually() async {
+    final newGuid = _guidController.text.trim();
+    if (newGuid.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('guid', newGuid);
+    currentGuid = newGuid;
+    _initMqtt(newGuid);
+    setState(() {});
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Присоединились вручную')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Center(
-        child: currentGuid.isEmpty
-            ? ElevatedButton(onPressed: _createGroup, child: const Text("Создать группу"))
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Настройки Сервера', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Row(
                 children: [
-                  const Text('Group Active', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
-                  QrImageView(
-                    data: "bridge://join?guid=$currentGuid",
-                    version: QrVersions.auto,
-                    size: 200.0,
-                  ),
-                  const SizedBox(height: 20),
-                  SelectableText(currentGuid),
-                  const SizedBox(height: 40),
-                  ElevatedButton(
-                      onPressed: _testConnection,
-                      child: const Text('Проверить связь')),
+                  Expanded(child: TextField(controller: _serverController, decoration: const InputDecoration(labelText: "Адрес сервера"))),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 80, child: TextField(controller: _portController, decoration: const InputDecoration(labelText: "Порт"), keyboardType: TextInputType.number)),
                 ],
               ),
+              ElevatedButton(onPressed: _saveServerConfig, child: const Text("Сохранить параметры сервера")),
+              const Divider(height: 40),
+              
+              currentGuid.isEmpty
+                  ? Column(
+                      children: [
+                        TextField(controller: _guidController, decoration: const InputDecoration(labelText: "GUID группы")),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(onPressed: _createGroup, child: const Text("Создать группу")),
+                            ElevatedButton(onPressed: _joinManually, child: const Text("Присоединиться")),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        const Text('Группа Активна', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        QrImageView(
+                          data: "bridge://join?guid=$currentGuid",
+                          version: QrVersions.auto,
+                          size: 180.0,
+                        ),
+                        const SizedBox(height: 10),
+                        SelectableText(currentGuid, textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                        TextField(controller: _guidController, decoration: const InputDecoration(labelText: "Сменить GUID вручную")),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            ElevatedButton(onPressed: _joinManually, child: const Text("Сменить GUID")),
+                            ElevatedButton(onPressed: _testConnection, child: const Text('Проверить связь')),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        TextButton(onPressed: () {
+                          setState(() {
+                             currentGuid = "";
+                             _guidController.clear();
+                          });
+                        }, child: const Text("Выйти из группы", style: TextStyle(color: Colors.red)))
+                      ],
+                    ),
+            ],
+          ),
+        ),
       ),
     );
   }
