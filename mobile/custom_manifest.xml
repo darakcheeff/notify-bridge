@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Notification Interception -->
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="notification_bridge"
@@ -33,10 +36,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Permissions for Android 14 Foreground Service -->
-        <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-        <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-        <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
         <service android:name="im.zoe.labs.flutter_notification_listener.NotificationsHandlerService"
                  android:label="Flutter Notification Bridge Listener"
