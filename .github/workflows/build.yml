@@ -31,6 +31,12 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Scaffold Android Project
+        run: |
+          rm -rf android
+          flutter create --platforms android --org com.notify.bridge .
+          cp custom_manifest.xml android/app/src/main/AndroidManifest.xml
+
       - name: Install dependencies
         run: flutter pub get
 
