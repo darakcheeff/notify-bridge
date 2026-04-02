@@ -37,43 +37,46 @@ jobs:
           flutter create --platforms android --org com.notify.bridge .
           cp custom_manifest.xml android/app/src/main/AndroidManifest.xml
           
-          # Use Python for robust patching of Kotlin DSL build.gradle.kts
-          python3 -c "
-import os
-path = 'android/app/build.gradle.kts'
-if not os.path.exists(path):
-    print(f'Error: {path} not found')
-    exit(1)
+          # Write patching script to a temporary file
+          cat << 'EOF' > patch_gradle.py
+          import os
+          path = 'android/app/build.gradle.kts'
+          if not os.path.exists(path):
+              print(f'Error: {path} not found')
+              exit(1)
 
-with open(path, 'r') as f:
-    lines = f.readlines()
+          with open(path, 'r') as f:
+              lines = f.readlines()
 
-new_lines = []
-for line in lines:
-    # 1. Update minSdk to 23
-    if 'minSdk =' in line:
-        line = line.split('=')[0] + '= 23\n'
-    new_lines.append(line)
-    
-    # 2. Inject desugaring into compileOptions
-    if 'compileOptions {' in line:
-        new_lines.append('        isCoreLibraryDesugaringEnabled = true\n')
+          new_lines = []
+          for line in lines:
+              # 1. Update minSdk to 23
+              if 'minSdk =' in line:
+                  line = line.split('=')[0] + '= 23\n'
+              new_lines.append(line)
+              
+              # 2. Inject desugaring into compileOptions
+              if 'compileOptions {' in line:
+                  new_lines.append('        isCoreLibraryDesugaringEnabled = true\n')
 
-content = ''.join(new_lines)
+          content = ''.join(new_lines)
 
-# 3. Add dependencies block with desugar lib
-desugar_dep = '    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")'
-if 'dependencies {' not in content:
-    content += f'\ndependencies {{\n{desugar_dep}\n}}\n'
-else:
-    # Insert at the beginning of the dependencies block
-    content = content.replace('dependencies {', f'dependencies {{\n{desugar_dep}')
+          # 3. Add dependencies block with desugar lib
+          desugar_dep = '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          if 'dependencies {' not in content:
+              content += f'\ndependencies {{\n{desugar_dep}\n}}\n'
+          else:
+              # Insert at the beginning of the dependencies block
+              content = content.replace('dependencies {', f'dependencies {{\n{desugar_dep}')
 
-with open(path, 'w') as f:
-    f.write(content)
-print('--- Patched build.gradle.kts ---')
-print(content)
-"
+          with open(path, 'w') as f:
+              f.write(content)
+          print('--- Patched build.gradle.kts ---')
+          print(content)
+          EOF
+
+          python3 patch_gradle.py
+
 
 
       - name: Install dependencies
