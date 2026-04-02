@@ -9,13 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  mqtt_client: ^10.4.1
+  mqtt_client: ^10.11.10
   device_apps: ^2.2.0
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.5
   qr_flutter: ^4.1.0
-  app_links: ^3.4.4
-  flutter_local_notifications: ^17.0.0
-  uuid: ^4.3.3
+  app_links: ^7.0.0
+  flutter_local_notifications: ^21.0.0
+  uuid: ^4.5.3
   flutter_notification_listener: ^1.4.0
 
 dev_dependencies:
