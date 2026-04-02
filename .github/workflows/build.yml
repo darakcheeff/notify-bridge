@@ -36,17 +36,18 @@ jobs:
           rm -rf android
           flutter create --platforms android --org com.notify.bridge .
           cp custom_manifest.xml android/app/src/main/AndroidManifest.xml
-          # Enable core library desugaring required by flutter_local_notifications >= 9
-          # and set minSdk to 23 (required by flutter_notification_listener)
-          BUILD_GRADLE="android/app/build.gradle"
-          # Set minSdkVersion to 23
+          # Flutter now generates Kotlin DSL (.kts) gradle files
+          BUILD_GRADLE="android/app/build.gradle.kts"
+          echo "--- Original build.gradle.kts ---"
+          cat "$BUILD_GRADLE"
+          # Set minSdk to 23 (flutter_notification_listener requirement)
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' "$BUILD_GRADLE"
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/' "$BUILD_GRADLE"
-          # Add coreLibraryDesugaringEnabled
+          sed -i 's/minSdk = libs.versions.minSdk.get().toInt()/minSdk = 23/' "$BUILD_GRADLE"
+          # Enable core library desugaring (flutter_local_notifications v21 requirement)
           sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$BUILD_GRADLE"
-          # Add desugar_jdk_libs dependency
-          sed -i '/dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$BUILD_GRADLE"
-          echo "--- Patched build.gradle ---"
+          # Add desugar dependency (Kotlin DSL syntax uses double-quotes)
+          sed -i '/^dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$BUILD_GRADLE"
+          echo "--- Patched build.gradle.kts ---"
           cat "$BUILD_GRADLE"
 
       - name: Install dependencies
