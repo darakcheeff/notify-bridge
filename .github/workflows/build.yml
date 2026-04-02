@@ -41,12 +41,12 @@ jobs:
           echo "--- Original build.gradle.kts ---"
           cat "$BUILD_GRADLE"
           # Set minSdk to 23 (flutter_notification_listener requirement)
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' "$BUILD_GRADLE"
-          sed -i 's/minSdk = libs.versions.minSdk.get().toInt()/minSdk = 23/' "$BUILD_GRADLE"
+          sed -i 's/minSdk = .*/minSdk = 23/' "$BUILD_GRADLE"
           # Enable core library desugaring (flutter_local_notifications v21 requirement)
-          sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$BUILD_GRADLE"
+          sed -i '/compileOptions {/a \        isCoreLibraryDesugaringEnabled = true' "$BUILD_GRADLE"
           # Add desugar dependency (Kotlin DSL syntax uses double-quotes)
-          sed -i '/^dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$BUILD_GRADLE"
+          # We use a more flexible regex for the dependencies block
+          sed -i '/dependencies {/a \    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$BUILD_GRADLE"
           echo "--- Patched build.gradle.kts ---"
           cat "$BUILD_GRADLE"
 
