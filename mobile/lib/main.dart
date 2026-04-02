@@ -219,7 +219,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   void _checkPermission() async {
-    bool has = await NotificationsListener.hasPermission;
+    bool has = (await NotificationsListener.hasPermission) ?? false;
     setState(() => _hasPermission = has);
     if (has) {
        NotificationsListener.startService();

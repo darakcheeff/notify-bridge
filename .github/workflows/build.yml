@@ -55,11 +55,11 @@ jobs:
               if 'minSdk =' in line:
                   line = line.split('=')[0] + '= 23\n'
               
-              # 2. Add Proguard rules config
-              if 'proguardFiles(' in line:
-                  line = '            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")\n'
-              
               new_lines.append(line)
+              
+              # 2. Add Proguard rules config inside release block
+              if 'release {' in line:
+                  new_lines.append('            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")\n')
               
               # 3. Inject desugaring into compileOptions
               if 'compileOptions {' in line:
