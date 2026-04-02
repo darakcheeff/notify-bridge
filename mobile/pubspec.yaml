@@ -1,0 +1,27 @@
+name: notification_bridge
+description: "A transparent MQTT notification hub."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mqtt_client: ^10.4.1
+  device_apps: ^2.2.0
+  shared_preferences: ^2.2.2
+  qr_flutter: ^4.1.0
+  app_links: ^3.4.4
+  flutter_local_notifications: ^17.0.0
+  uuid: ^4.3.3
+  flutter_notification_listener: ^2.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

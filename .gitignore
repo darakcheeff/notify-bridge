@@ -1,0 +1,21 @@
+# Global
+*.log
+.DS_Store
+
+# Go Backend
+backend/server
+backend/bridge.db*
+
+# Flutter Mobile
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/ios/.symlinks/
+mobile/ios/Pods/
