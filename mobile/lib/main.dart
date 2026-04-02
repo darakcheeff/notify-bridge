@@ -207,6 +207,7 @@ class _HomeTabState extends State<HomeTab> {
   final TextEditingController _serverController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
   final TextEditingController _guidController = TextEditingController();
+  bool _hasPermission = false;
 
   @override
   void initState() {
@@ -214,6 +215,21 @@ class _HomeTabState extends State<HomeTab> {
     _serverController.text = serverAddress;
     _portController.text = serverPort.toString();
     _guidController.text = currentGuid;
+    _checkPermission();
+  }
+
+  void _checkPermission() async {
+    bool has = await NotificationsListener.hasPermission;
+    setState(() => _hasPermission = has);
+    if (has) {
+       NotificationsListener.startService();
+    }
+  }
+
+  void _grantPermission() async {
+    await NotificationsListener.openPermissionSettings();
+    // Re-check after the user returns from settings (approximate)
+    Future.delayed(const Duration(seconds: 2), _checkPermission);
   }
 
   void _createGroup() async {
@@ -292,6 +308,21 @@ class _HomeTabState extends State<HomeTab> {
               ElevatedButton(onPressed: _saveServerConfig, child: const Text("Сохранить параметры сервера")),
               const Divider(height: 40),
               
+              if (!_hasPermission)
+                 Container(
+                   padding: const EdgeInsets.all(12),
+                   decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(8)),
+                   child: Column(
+                     children: [
+                       const Text("Нет прав на чтение уведомлений!", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                       const SizedBox(height: 10),
+                       const Text("Приложению нужен доступ к уведомлениям для пересылки сообщений.", textAlign: TextAlign.center),
+                       ElevatedButton(onPressed: _grantPermission, child: const Text("Разрешить доступ")),
+                     ],
+                   ),
+                 ),
+              
+              const SizedBox(height: 20),
               currentGuid.isEmpty
                   ? Column(
                       children: [

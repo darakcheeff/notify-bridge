@@ -1,0 +1,1 @@
+-keep class im.zoe.labs.flutter_notification_listener.** { *; }
