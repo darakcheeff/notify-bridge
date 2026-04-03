@@ -193,14 +193,14 @@ void _initMqtt(String guid) async {
   mqttService!.messages?.listen((messages) {
     for (var m in messages) {
       final MqttPublishMessage recMess = m.payload as MqttPublishMessage;
-      final payload = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+      final payload = utf8.decode(recMess.payload.message.toList());
       try {
         final decoded = jsonDecode(payload);
         final packet = Packet.fromJson(decoded);
         if (packet.metadata.deviceId == deviceId) continue; // ignore own loopback
 
         if (packet.type == 'link_test') {
-          _showLocalNotification("Устройство ${packet.metadata.deviceName} успешно подключено к вашей группе!");
+          _showLocalNotification("Система", "Устройство ${packet.metadata.deviceName} успешно подключено к вашей группе!");
         } else if (packet.type == 'notification') {
           final item = NotificationItem(
             deviceName: packet.metadata.deviceName,

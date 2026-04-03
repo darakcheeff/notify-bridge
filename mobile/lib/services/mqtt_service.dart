@@ -46,8 +46,7 @@ class MqttService {
     
     final topic = 'bridge/$currentGuid/upstream';
     final builder = MqttClientPayloadBuilder();
-    final payload = utf8.encode(jsonEncode(packet.toJson()));
-    builder.addUint8List(Uint8List.fromList(payload));
+    builder.addString(jsonEncode(packet.toJson()));
     
     _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
   }
