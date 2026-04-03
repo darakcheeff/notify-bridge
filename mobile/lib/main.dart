@@ -782,3 +782,4 @@ class _QrScannerPageState extends State<QrScannerPage> {
   }
 }
 // Poke stuck build
+// Poke stuck build 2
