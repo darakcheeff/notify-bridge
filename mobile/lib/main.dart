@@ -756,3 +756,4 @@ class QrScannerPage extends StatelessWidget {
     );
   }
 }
+// Poke stuck build
