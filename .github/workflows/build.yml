@@ -86,7 +86,7 @@ jobs:
 
 
       - name: Install dependencies
-        run: flutter pub add flutter_local_notifications uuid app_links qr_flutter installed_apps shared_preferences flutter_notification_listener mqtt_client device_info_plus
+        run: flutter pub add flutter_local_notifications uuid app_links qr_flutter installed_apps shared_preferences flutter_notification_listener mqtt_client device_info_plus mobile_scanner permission_handler
 
       - name: Build APK Release
         run: flutter build apk --release

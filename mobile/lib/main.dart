@@ -15,6 +15,8 @@ import 'services/mqtt_service.dart';
 import 'services/filtering_engine.dart';
 import 'models/packet.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
@@ -85,6 +87,14 @@ Future<void> main() async {
   await prefs.setString('device_id', deviceId);
 
   await filteringEngine.loadSettings();
+
+  bool isFirstRun = prefs.getBool('first_run') ?? true;
+  if (isFirstRun) {
+    List<AppInfo> apps = await InstalledApps.getInstalledApps(excludeSystemApps: true);
+    filteringEngine.allowedApps = apps.map((e) => e.packageName ?? "").where((e) => e.isNotEmpty).toList();
+    await filteringEngine.saveSettings();
+    await prefs.setBool('first_run', false);
+  }
 
   if (currentGuid.isNotEmpty) {
     _initMqtt(currentGuid);
@@ -464,6 +474,40 @@ class _HomeTabState extends State<HomeTab> {
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             ElevatedButton(onPressed: _createGroup, child: const Text("Создать группу")),
+                            ElevatedButton(
+                              onPressed: () async {
+                                if (await Permission.camera.request().isGranted) {
+                                  final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const QrScannerPage()));
+                                  if (result != null) {
+                                    final uri = Uri.parse(result);
+                                    // Use the existing _processUri logic from MainScreen via a callback or duplicate
+                                    // For simplicity here, we'll just handle it directly
+                                    final newGuid = uri.queryParameters['guid'];
+                                    final newServer = uri.queryParameters['server'];
+                                    final newPort = uri.queryParameters['port'];
+                                    if (newGuid != null) {
+                                      final prefs = await SharedPreferences.getInstance();
+                                      await prefs.setString('guid', newGuid);
+                                      currentGuid = newGuid;
+                                      if (newServer != null) {
+                                        serverAddress = newServer;
+                                        await prefs.setString('server_address', newServer);
+                                      }
+                                      if (newPort != null) {
+                                        int? p = int.tryParse(newPort);
+                                        if (p != null) {
+                                          serverPort = p;
+                                          await prefs.setInt('server_port', p);
+                                        }
+                                      }
+                                      _initMqtt(newGuid);
+                                      setState(() {});
+                                    }
+                                  }
+                                }
+                              },
+                              child: const Icon(Icons.qr_code_scanner),
+                            ),
                             ElevatedButton(onPressed: _joinManually, child: const Text("Присоединиться")),
                           ],
                         ),
@@ -605,6 +649,19 @@ class _FiltersTabState extends State<FiltersTab> {
                     },
                   ),
           ),
+          CheckboxListTile(
+            title: const Text("Выбрать всё"),
+            value: filteringEngine.allowedApps.length == _installedApps.length && _installedApps.isNotEmpty,
+            onChanged: (val) {
+              setState(() {
+                if (val == true) {
+                  filteringEngine.allowedApps = _installedApps.map((e) => e.packageName ?? "").where((e) => e.isNotEmpty).toList();
+                } else {
+                  filteringEngine.allowedApps.clear();
+                }
+              });
+            },
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -657,5 +714,27 @@ class _HistoryTabState extends State<HistoryTab> {
 
   String _formatDateTime(DateTime dt) {
     return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}";
+  }
+}
+
+class QrScannerPage extends StatelessWidget {
+  const QrScannerPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Сканировать QR')),
+      body: MobileScanner(
+        onDetect: (capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          if (barcodes.isNotEmpty) {
+            final String? code = barcodes.first.rawValue;
+            if (code != null && code.startsWith('bridge://join')) {
+              Navigator.pop(context, code);
+            }
+          }
+        },
+      ),
+    );
   }
 }

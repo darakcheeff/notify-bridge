@@ -16,7 +16,8 @@ class MqttService {
     currentGuid = guid;
     _client = MqttServerClient.withPort(server, deviceId, port);
     _client!.logging(on: false);
-    _client!.keepAlivePeriod = 60;
+    _client!.keepAlivePeriod = 30;
+    _client!.autoReconnect = true;
     _client!.onDisconnected = _onDisconnected;
 
     final connMess = MqttConnectMessage()
