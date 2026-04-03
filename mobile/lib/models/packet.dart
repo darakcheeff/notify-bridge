@@ -64,11 +64,13 @@ class PacketMetadata {
 
 class PacketData {
   final String? appPackage;
+  final String? appName;
   final String? title;
   final String? body;
 
   PacketData({
     this.appPackage,
+    this.appName,
     this.title,
     this.body,
   });
@@ -76,6 +78,7 @@ class PacketData {
   factory PacketData.fromJson(Map<String, dynamic> json) {
     return PacketData(
       appPackage: json['app_package'] as String?,
+      appName: json['app_name'] as String?,
       title: json['title'] as String?,
       body: json['body'] as String?,
     );
@@ -84,6 +87,7 @@ class PacketData {
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> mappedData = {};
     if (appPackage != null) mappedData['app_package'] = appPackage;
+    if (appName != null) mappedData['app_name'] = appName;
     if (title != null) mappedData['title'] = title;
     if (body != null) mappedData['body'] = body;
     return mappedData;

@@ -26,6 +26,7 @@ int serverPort = 1883;
 String deviceDisplayName = "Android Device";
 String currentGuid = "";
 String deviceId = "";
+Map<String, String> appNameCache = {};
 
 List<NotificationItem> history = [];
 
@@ -148,6 +149,12 @@ void onData(NotificationEvent event) async {
     _initMqtt(currentGuid);
   }
 
+  String appName = appNameCache[event.packageName] ?? event.packageName ?? "Unknown";
+  if (appName == event.packageName && event.packageName != null) {
+     // Not in cache, try to fetch (this is async, so we might miss it for the very first notification)
+     _getAndCacheAppName(event.packageName!);
+  }
+
   if (filteringEngine.shouldSend(event.packageName ?? "", event.title ?? "", event.text ?? "")) {
     final packet = Packet(
       type: "notification",
@@ -162,10 +169,20 @@ void onData(NotificationEvent event) async {
         title: event.title ?? "",
         body: event.text ?? "",
         appPackage: event.packageName ?? "",
+        appName: appName,
       ),
     );
     mqttService?.publishPacket(packet);
   }
+}
+
+Future<void> _getAndCacheAppName(String packageName) async {
+  try {
+    final app = await InstalledApps.getAppInfo(packageName);
+    if (app != null && app.name != null) {
+      appNameCache[packageName] = app.name!;
+    }
+  } catch (e) {}
 }
 
 void _initMqtt(String guid) async {
@@ -187,7 +204,7 @@ void _initMqtt(String guid) async {
         } else if (packet.type == 'notification') {
           final item = NotificationItem(
             deviceName: packet.metadata.deviceName,
-            appName: packet.data?.appPackage ?? "Unknown",
+            appName: packet.data?.appName ?? packet.data?.appPackage ?? "Unknown",
             title: packet.data?.title ?? "",
             body: packet.data?.body ?? "",
             timestamp: DateTime.fromMillisecondsSinceEpoch(packet.metadata.timestamp),
@@ -214,12 +231,13 @@ void _handleIncomingNotification(NotificationItem item) async {
   await prefs.setStringList('history', history.map((e) => jsonEncode(e.toJson())).toList());
 
   _showLocalNotification(
-    "${item.deviceName} - ${item.appName}\n${item.title}: ${item.body}",
+    item.appName,
+    "${item.deviceName}\n${item.title}: ${item.body}",
     payload: jsonEncode(item.toJson()),
   );
 }
 
-void _showLocalNotification(String message, {String? payload}) async {
+void _showLocalNotification(String title, String message, {String? payload}) async {
   const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
     'bridge_channel',
     'Notification Bridge Relays',
@@ -229,7 +247,7 @@ void _showLocalNotification(String message, {String? payload}) async {
   const NotificationDetails details = NotificationDetails(android: androidDetails);
   await flutterLocalNotificationsPlugin.show(
     id: DateTime.now().millisecondsSinceEpoch % 100000,
-    title: 'Bridge Relay',
+    title: title,
     body: message,
     notificationDetails: details,
     payload: payload,

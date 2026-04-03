@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import 'dart:typed_data';
 import '../models/packet.dart';
 
 class MqttService {
@@ -45,7 +46,8 @@ class MqttService {
     
     final topic = 'bridge/$currentGuid/upstream';
     final builder = MqttClientPayloadBuilder();
-    builder.addString(jsonEncode(packet.toJson()));
+    final payload = utf8.encode(jsonEncode(packet.toJson()));
+    builder.addUint8List(Uint8List.fromList(payload));
     
     _client!.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
   }
