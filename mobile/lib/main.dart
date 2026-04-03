@@ -10,14 +10,16 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_notification_listener/flutter_notification_listener.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
+import 'dart:io';
 import 'services/mqtt_service.dart';
 import 'services/filtering_engine.dart';
 import 'models/packet.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
 MqttService? mqttService;
-String serverAddress = "10.0.2.2";
+String serverAddress = "nb.ansy.us";
 int serverPort = 1883;
 String deviceDisplayName = "Android Device";
 String currentGuid = "";
@@ -66,9 +68,16 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   currentGuid = prefs.getString('guid') ?? "";
   deviceId = prefs.getString('device_id') ?? const Uuid().v4();
-  serverAddress = prefs.getString('server_address') ?? "10.0.2.2";
+  serverAddress = prefs.getString('server_address') ?? "nb.ansy.us";
   serverPort = prefs.getInt('server_port') ?? 1883;
-  deviceDisplayName = prefs.getString('device_display_name') ?? "Android Device";
+  
+  String? savedName = prefs.getString('device_display_name');
+  if (savedName == null) {
+      deviceDisplayName = await _getDeviceModel();
+      await prefs.setString('device_display_name', deviceDisplayName);
+  } else {
+      deviceDisplayName = savedName;
+  }
   
   final historyJson = prefs.getStringList('history') ?? [];
   history = historyJson.map((e) => NotificationItem.fromJson(jsonDecode(e))).toList();
@@ -83,6 +92,19 @@ Future<void> main() async {
   }
 
   runApp(const MyApp());
+}
+
+Future<String> _getDeviceModel() async {
+  try {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      return androidInfo.model; // e.g. "mha-l29"
+    }
+  } catch (e) {
+    // fallback
+  }
+  return "Android Device";
 }
 
 void _showPersistentNotification() async {
@@ -250,10 +272,26 @@ class _MainScreenState extends State<MainScreen> {
   void _processUri(Uri uri) async {
     if (uri.scheme == 'bridge' && uri.host == 'join') {
       final newGuid = uri.queryParameters['guid'];
+      final newServer = uri.queryParameters['server'];
+      final newPort = uri.queryParameters['port'];
+      
       if (newGuid != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('guid', newGuid);
         currentGuid = newGuid;
+        
+        if (newServer != null) {
+            serverAddress = newServer;
+            await prefs.setString('server_address', newServer);
+        }
+        if (newPort != null) {
+            int? p = int.tryParse(newPort);
+            if (p != null) {
+                serverPort = p;
+                await prefs.setInt('server_port', p);
+            }
+        }
+        
         _initMqtt(newGuid);
         setState(() {});
       }
@@ -436,7 +474,7 @@ class _HomeTabState extends State<HomeTab> {
                         const Text('Группа Активна', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 10),
                         QrImageView(
-                          data: "bridge://join?guid=$currentGuid",
+                          data: "bridge://join?guid=$currentGuid&server=$serverAddress&port=$serverPort",
                           version: QrVersions.auto,
                           size: 180.0,
                         ),
