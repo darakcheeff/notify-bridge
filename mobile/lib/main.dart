@@ -16,6 +16,7 @@ import 'models/packet.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
+MqttService? mqttService;
 String serverAddress = "10.0.2.2";
 int serverPort = 1883;
 String deviceDisplayName = "Android Device";
@@ -97,10 +98,10 @@ void _showPersistentNotification() async {
   );
   const NotificationDetails details = NotificationDetails(android: androidDetails);
   await flutterLocalNotificationsPlugin.show(
-    999, // Static ID for persistent notification
-    'Notification Bridge',
-    'Служба активна и ожидает уведомлений',
-    details,
+    id: 999,
+    title: 'Notification Bridge',
+    body: 'Служба активна и ожидает уведомлений',
+    notificationDetails: details,
   );
 }
 
@@ -195,10 +196,10 @@ void _showLocalNotification(String message, {String? payload}) async {
   );
   const NotificationDetails details = NotificationDetails(android: androidDetails);
   await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch % 100000,
-    'Bridge Relay',
-    message,
-    details,
+    id: DateTime.now().millisecondsSinceEpoch % 100000,
+    title: 'Bridge Relay',
+    body: message,
+    notificationDetails: details,
     payload: payload,
   );
 }
