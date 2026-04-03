@@ -94,6 +94,45 @@ jobs:
 
           python3 patch_gradle.py
 
+      - name: Patch Root Build.gradle
+        run: |
+          python3 -c '
+          import os
+          path = "android/build.gradle"
+          if not os.path.exists(path):
+              path = "android/build.gradle.kts"
+          if not os.path.exists(path):
+              exit(0)
+          with open(path, "r") as f:
+              content = f.read()
+          # Add subprojects block for namespace and JVM fixes
+          fix = """
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      if (project.android.namespace == null) {
+                          project.android.namespace = project.group
+                      }
+                      project.android {
+                          compileOptions {
+                              sourceCompatibility JavaVersion.VERSION_17
+                              targetCompatibility JavaVersion.VERSION_17
+                          }
+                      }
+                      project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                          kotlinOptions {
+                              jvmTarget = "17"
+                          }
+                      }
+                  }
+              }
+          }
+          """
+          if "subprojects {" not in content:
+              with open(path, "a") as f:
+                  f.write(fix)
+          '
+
       - name: Install dependencies
         run: flutter pub add flutter_local_notifications uuid app_links qr_flutter installed_apps shared_preferences flutter_notification_listener mqtt_client device_info_plus qr_code_scanner permission_handler
 
