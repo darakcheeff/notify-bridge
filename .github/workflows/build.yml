@@ -61,6 +61,13 @@ jobs:
               if 'release {' in line:
                   new_lines.append('            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")\n')
               
+              # 2.1 Exclude Firebase/GMS (for Non-GMS devices)
+              if 'android {' in line:
+                  new_lines.append('    configurations.all {\n')
+                  new_lines.append('        exclude(group = "com.google.firebase")\n')
+                  new_lines.append('        exclude(group = "com.google.android.gms")\n')
+                  new_lines.append('    }\n')
+
               # 3. Inject desugaring into compileOptions
               if 'compileOptions {' in line:
                   new_lines.append('        isCoreLibraryDesugaringEnabled = true\n')

@@ -20,6 +20,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 MqttService? mqttService;
 String serverAddress = "nb.ansy.us";
 int serverPort = 1883;
@@ -260,6 +261,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: ThemeData(primarySwatch: Colors.indigo, useMaterial3: true),
       home: const MainScreen(),
     );
@@ -429,9 +431,7 @@ class _HomeTabState extends State<HomeTab> {
       _showPersistentNotification();
     }
     
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Настройки сохранены')));
-    }
+    scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Настройки сохранены')));
   }
 
   void _joinManually() async {
@@ -602,9 +602,7 @@ class _FiltersTabState extends State<FiltersTab> {
     filteringEngine.whitelist = _whiteListController.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     filteringEngine.blacklist = _blackListController.text.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     await filteringEngine.saveSettings();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Настройки сохранены')));
-    }
+    scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Настройки сохранены')));
   }
 
   void _reset() async {
