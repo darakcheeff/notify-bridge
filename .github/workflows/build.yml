@@ -99,7 +99,9 @@ jobs:
 
       - name: Patch Plugin Namespaces & JVM
         run: |
-          find /home/runner/.pub-cache -name "build.gradle" -path "*/qr_code_scanner*/android/*" -exec sed -i '/android {/a \    namespace "net.touchcapture.qr.flutterqr"\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n    kotlinOptions {\n        jvmTarget = "17"\n    }' {} +
+          find /home/runner/.pub-cache -name "build.gradle" -path "*/qr_code_scanner*/android/*" -exec sed -i '/android {/a \    namespace "net.touchcapture.qr.flutterqr"' {} +
+          find /home/runner/.pub-cache -name "build.gradle" -path "*/qr_code_scanner*/android/*" -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
+          find /home/runner/.pub-cache -name "build.gradle" -path "*/qr_code_scanner*/android/*" -exec sed -i "s/'1.8'/'17'/g" {} +
 
       - name: Build APK Release
         run: flutter build apk --release
