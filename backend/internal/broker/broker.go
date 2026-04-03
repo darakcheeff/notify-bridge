@@ -119,6 +119,8 @@ func (h *BridgeHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Pack
 			if packet.Type == "notification" {
 				log.Printf("[GROUP %s] From %s: %s - %s\n", guid, packet.Metadata.DeviceName, packet.Data.AppPackage, packet.Data.Title)
 			}
+		} else {
+			log.Printf("[GROUP %s] JSON Unmarshal error: %v | Raw: %s\n", guid, err, string(pk.Payload))
 		}
 
 		h.mu.Lock()
