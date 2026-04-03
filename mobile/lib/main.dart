@@ -15,7 +15,7 @@ import 'services/mqtt_service.dart';
 import 'services/filtering_engine.dart';
 import 'models/packet.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -733,25 +733,52 @@ class _HistoryTabState extends State<HistoryTab> {
   }
 }
 
-class QrScannerPage extends StatelessWidget {
+class QrScannerPage extends StatefulWidget {
   const QrScannerPage({super.key});
+
+  @override
+  State<QrScannerPage> createState() => _QrScannerPageState();
+}
+
+class _QrScannerPageState extends State<QrScannerPage> {
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  QRViewController? controller;
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (Platform.isAndroid) {
+      controller?.pauseCamera();
+    }
+    controller?.resumeCamera();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Сканировать QR')),
-      body: MobileScanner(
-        onDetect: (capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          if (barcodes.isNotEmpty) {
-            final String? code = barcodes.first.rawValue;
-            if (code != null && code.startsWith('bridge://join')) {
-              Navigator.pop(context, code);
-            }
-          }
-        },
+      body: QRView(
+        key: qrKey,
+        onQRViewCreated: _onQRViewCreated,
       ),
     );
+  }
+
+  void _onQRViewCreated(QRViewController controller) {
+    this.controller = controller;
+    controller.scannedDataStream.listen((scanData) {
+      final String? code = scanData.code;
+      if (code != null && code.startsWith('bridge://join')) {
+        controller.dispose();
+        Navigator.pop(context, code);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    controller?.dispose();
+    super.dispose();
   }
 }
 // Poke stuck build
