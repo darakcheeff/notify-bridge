@@ -17,10 +17,41 @@ import 'models/packet.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
 MqttService? mqttService;
-String currentGuid = "";
-String deviceId = const Uuid().v4();
 String serverAddress = "10.0.2.2";
 int serverPort = 1883;
+String deviceDisplayName = "Android Device";
+
+List<NotificationItem> history = [];
+
+class NotificationItem {
+  final String deviceName;
+  final String appName;
+  final String title;
+  final String body;
+  final DateTime timestamp;
+
+  NotificationItem({required this.deviceName, required this.appName, required this.title, required this.body, required this.timestamp});
+
+  Map<String, dynamic> toJson() => {
+    'deviceName': deviceName,
+    'appName': appName,
+    'title': title,
+    'body': body,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory NotificationItem.fromJson(Map<String, dynamic> json) => NotificationItem(
+    deviceName: json['deviceName'] ?? "",
+    appName: json['appName'] ?? "",
+    title: json['title'] ?? "",
+    body: json['body'] ?? "",
+    timestamp: DateTime.parse(json['timestamp']),
+  );
+
+  bool equals(NotificationItem other) {
+    return deviceName == other.deviceName && appName == other.appName && title == other.title && body == other.body;
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,15 +66,41 @@ Future<void> main() async {
   deviceId = prefs.getString('device_id') ?? const Uuid().v4();
   serverAddress = prefs.getString('server_address') ?? "10.0.2.2";
   serverPort = prefs.getInt('server_port') ?? 1883;
+  deviceDisplayName = prefs.getString('device_display_name') ?? "Android Device";
+  
+  final historyJson = prefs.getStringList('history') ?? [];
+  history = historyJson.map((e) => NotificationItem.fromJson(jsonDecode(e))).toList();
+  
   await prefs.setString('device_id', deviceId);
 
   await filteringEngine.loadSettings();
 
   if (currentGuid.isNotEmpty) {
     _initMqtt(currentGuid);
+    _showPersistentNotification(); // Ensure foreground service is alive
   }
 
   runApp(const MyApp());
+}
+
+void _showPersistentNotification() async {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'service_channel',
+    'Service Status',
+    channelDescription: 'Keeps the app alive in background',
+    importance: Importance.low,
+    priority: Priority.low,
+    ongoing: true,
+    autoCancel: false,
+    showWhen: false,
+  );
+  const NotificationDetails details = NotificationDetails(android: androidDetails);
+  await flutterLocalNotificationsPlugin.show(
+    999, // Static ID for persistent notification
+    'Notification Bridge',
+    'Служба активна и ожидает уведомлений',
+    details,
+  );
 }
 
 @pragma('vm:entry-point')
@@ -53,43 +110,28 @@ void onData(NotificationEvent event) async {
     final prefs = await SharedPreferences.getInstance();
     serverAddress = prefs.getString('server_address') ?? "10.0.2.2";
     serverPort = prefs.getInt('server_port') ?? 1883;
+    deviceDisplayName = prefs.getString('device_display_name') ?? "Android Device";
     _initMqtt(currentGuid);
   }
 
-  final String pack = event.packageName ?? "";
-  final String title = event.title ?? "";
-  final String text = event.text ?? "";
-
-  if (filteringEngine.shouldSend(pack, title, text)) {
+  if (filteringEngine.shouldSend(event.packageName ?? "", event.title ?? "", event.text ?? "")) {
     final packet = Packet(
       type: "notification",
       version: 1,
       metadata: PacketMetadata(
         deviceId: deviceId,
-        deviceName: "Android Receiver",
+        deviceName: deviceDisplayName,
         guid: currentGuid,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       ),
-      data: PacketData(appPackage: pack, title: title, body: text),
+      data: PacketData(
+        title: event.title ?? "",
+        body: event.text ?? "",
+        packageName: event.packageName ?? "",
+      ),
     );
     mqttService?.publishPacket(packet);
   }
-}
-
-Future<void> _showLocalNotification(String content) async {
-  const AndroidNotificationDetails androidNotificationDetails = AndroidNotificationDetails(
-    'bridge_channel',
-    'Bridge Notifications',
-    importance: Importance.max,
-    priority: Priority.high,
-  );
-  const NotificationDetails notificationDetails = NotificationDetails(android: androidNotificationDetails);
-  await flutterLocalNotificationsPlugin.show(
-    id: 0,
-    title: 'Bridge Message',
-    body: content,
-    notificationDetails: notificationDetails,
-  );
 }
 
 void _initMqtt(String guid) async {
@@ -109,7 +151,14 @@ void _initMqtt(String guid) async {
         if (packet.type == 'link_test') {
           _showLocalNotification("Устройство ${packet.metadata.deviceName} успешно подключено к вашей группе!");
         } else if (packet.type == 'notification') {
-          _showLocalNotification("${packet.data?.title} - ${packet.data?.body}");
+          final item = NotificationItem(
+            deviceName: packet.metadata.deviceName,
+            appName: packet.data?.packageName ?? "Unknown",
+            title: packet.data?.title ?? "",
+            body: packet.data?.body ?? "",
+            timestamp: DateTime.fromMillisecondsSinceEpoch(packet.metadata.timestamp),
+          );
+          _handleIncomingNotification(item);
         }
       } catch (e) {
         // malformed packet
@@ -118,13 +167,48 @@ void _initMqtt(String guid) async {
   });
 }
 
+void _handleIncomingNotification(NotificationItem item) async {
+  // Check for duplicates in history
+  for (var existing in history) {
+    if (existing.equals(item)) return; // Ignore duplicate
+  }
+
+  history.insert(0, item);
+  if (history.length > 100) history.removeLast();
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setStringList('history', history.map((e) => jsonEncode(e.toJson())).toList());
+
+  _showLocalNotification(
+    "${item.deviceName} - ${item.appName}\n${item.title}: ${item.body}",
+    payload: jsonEncode(item.toJson()),
+  );
+}
+
+void _showLocalNotification(String message, {String? payload}) async {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'bridge_channel',
+    'Notification Bridge Relays',
+    importance: Importance.max,
+    priority: Priority.high,
+  );
+  const NotificationDetails details = NotificationDetails(android: androidDetails);
+  await flutterLocalNotificationsPlugin.show(
+    DateTime.now().millisecondsSinceEpoch % 100000,
+    'Bridge Relay',
+    message,
+    details,
+    payload: payload,
+  );
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Notification Bridge',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(primarySwatch: Colors.indigo, useMaterial3: true),
       home: const MainScreen(),
     );
   }
@@ -132,13 +216,20 @@ class MyApp extends StatelessWidget {
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   final _appLinks = AppLinks();
-  int _currentIndex = 0;
+  int _selectedIndex = 0;
+
+  final List<Widget> _tabs = [
+    const HomeTab(),
+    const FiltersTab(),
+    const HistoryTab(),
+  ];
 
   @override
   void initState() {
@@ -147,11 +238,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _handleIncomingLinks() async {
-    // 1. Handle cold start (initial link)
     final initialUri = await _appLinks.getInitialLink();
     if (initialUri != null) _processUri(initialUri);
-
-    // 2. Handle stream (incoming when app is open)
     _appLinks.uriLinkStream.listen((Uri? uri) {
       if (uri != null) _processUri(uri);
     });
@@ -166,28 +254,22 @@ class _MainScreenState extends State<MainScreen> {
         currentGuid = newGuid;
         _initMqtt(newGuid);
         setState(() {});
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Присоединились к группе!')));
-        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    List<Widget> pages = [
-      const HomeTab(),
-      const FiltersTab(),
-    ];
-
     return Scaffold(
-      body: pages[_currentIndex],
+      appBar: AppBar(title: const Text('Notification Bridge')),
+      body: _tabs[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.link), label: "Onboarding"),
-          BottomNavigationBarItem(icon: Icon(Icons.filter_list), label: "Filters"),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Настройка'),
+          BottomNavigationBarItem(icon: Icon(Icons.filter_alt), label: 'Фильтры'),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'История'),
         ],
       ),
     );
@@ -207,6 +289,7 @@ class _HomeTabState extends State<HomeTab> {
   final TextEditingController _serverController = TextEditingController();
   final TextEditingController _portController = TextEditingController();
   final TextEditingController _guidController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   bool _hasPermission = false;
 
   @override
@@ -215,8 +298,11 @@ class _HomeTabState extends State<HomeTab> {
     _serverController.text = serverAddress;
     _portController.text = serverPort.toString();
     _guidController.text = currentGuid;
+    _nameController.text = deviceDisplayName;
     _checkPermission();
   }
+  
+  // ... rest of methods like _saveServerConfig ...
 
   void _checkPermission() async {
     bool has = (await NotificationsListener.hasPermission) ?? false;
@@ -263,15 +349,20 @@ class _HomeTabState extends State<HomeTab> {
     final prefs = await SharedPreferences.getInstance();
     serverAddress = _serverController.text.trim();
     serverPort = int.tryParse(_portController.text.trim()) ?? 1883;
+    deviceDisplayName = _nameController.text.trim();
+    if (deviceDisplayName.isEmpty) deviceDisplayName = "Android Device";
+    
     await prefs.setString('server_address', serverAddress);
     await prefs.setInt('server_port', serverPort);
+    await prefs.setString('device_display_name', deviceDisplayName);
     
     if (currentGuid.isNotEmpty) {
-      _initMqtt(currentGuid); // Reconnect with new address
+      _initMqtt(currentGuid);
+      _showPersistentNotification();
     }
     
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сервер сохранен')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Настройки сохранены')));
     }
   }
 
@@ -298,6 +389,7 @@ class _HomeTabState extends State<HomeTab> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text('Настройки Сервера', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Имя этого устройства (напр. mha-l29)")),
               Row(
                 children: [
                   Expanded(child: TextField(controller: _serverController, decoration: const InputDecoration(labelText: "Адрес сервера"))),
@@ -305,7 +397,7 @@ class _HomeTabState extends State<HomeTab> {
                   SizedBox(width: 80, child: TextField(controller: _portController, decoration: const InputDecoration(labelText: "Порт"), keyboardType: TextInputType.number)),
                 ],
               ),
-              ElevatedButton(onPressed: _saveServerConfig, child: const Text("Сохранить параметры сервера")),
+              ElevatedButton(onPressed: _saveServerConfig, child: const Text("Сохранить настройки")),
               const Divider(height: 40),
               
               if (!_hasPermission)
@@ -484,5 +576,46 @@ class _FiltersTabState extends State<FiltersTab> {
         ],
       ),
     );
+  }
+}
+
+class HistoryTab extends StatefulWidget {
+  const HistoryTab({super.key});
+
+  @override
+  State<HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabState extends State<HistoryTab> {
+  @override
+  Widget build(BuildContext context) {
+    return history.isEmpty
+        ? const Center(child: Text("История пуста"))
+        : ListView.separated(
+            itemCount: history.length,
+            separatorBuilder: (context, index) => const Divider(),
+            itemBuilder: (context, index) {
+              final item = history[index];
+              return ListTile(
+                leading: const Icon(Icons.notifications_active, color: Colors.indigo),
+                title: Text("${item.title} (${item.appName})"),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.body),
+                    const SizedBox(height: 4),
+                    Text(
+                      "${item.deviceName} • ${_formatDateTime(item.timestamp)}",
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}";
   }
 }
