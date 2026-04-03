@@ -16,10 +16,11 @@ import 'models/packet.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
-MqttService? mqttService;
 String serverAddress = "10.0.2.2";
 int serverPort = 1883;
 String deviceDisplayName = "Android Device";
+String currentGuid = "";
+String deviceId = "";
 
 List<NotificationItem> history = [];
 
@@ -127,7 +128,7 @@ void onData(NotificationEvent event) async {
       data: PacketData(
         title: event.title ?? "",
         body: event.text ?? "",
-        packageName: event.packageName ?? "",
+        appPackage: event.packageName ?? "",
       ),
     );
     mqttService?.publishPacket(packet);
@@ -153,7 +154,7 @@ void _initMqtt(String guid) async {
         } else if (packet.type == 'notification') {
           final item = NotificationItem(
             deviceName: packet.metadata.deviceName,
-            appName: packet.data?.packageName ?? "Unknown",
+            appName: packet.data?.appPackage ?? "Unknown",
             title: packet.data?.title ?? "",
             body: packet.data?.body ?? "",
             timestamp: DateTime.fromMillisecondsSinceEpoch(packet.metadata.timestamp),
