@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'dart:typed_data';
@@ -11,6 +12,9 @@ class MqttService {
   final String deviceId;
   String? currentGuid;
 
+  final ValueNotifier<MqttConnectionState> connectionState = ValueNotifier(MqttConnectionState.disconnected);
+  DateTime? lastSuccess;
+
   MqttService({required this.server, required this.port, required this.deviceId});
 
   Future<bool> connect(String guid) async {
@@ -20,23 +24,30 @@ class MqttService {
     _client!.keepAlivePeriod = 30;
     _client!.autoReconnect = true;
     _client!.onDisconnected = _onDisconnected;
+    _client!.onConnected = _onConnected;
+    _client!.onSubscribed = _onSubscribed;
 
     final connMess = MqttConnectMessage()
         .withClientIdentifier(deviceId)
         .startClean();
     _client!.connectionMessage = connMess;
 
+    connectionState.value = MqttConnectionState.connecting;
     try {
       await _client!.connect();
     } catch (e) {
       _client!.disconnect();
+      connectionState.value = MqttConnectionState.faulted;
       return false;
     }
 
     if (_client!.connectionStatus!.state == MqttConnectionState.connected) {
       _client!.subscribe('bridge/$currentGuid/downstream', MqttQos.atLeastOnce);
+      connectionState.value = MqttConnectionState.connected;
+      lastSuccess = DateTime.now();
       return true;
     }
+    connectionState.value = _client!.connectionStatus!.state;
     return false;
   }
 
@@ -46,7 +57,6 @@ class MqttService {
     
     final topic = 'bridge/$currentGuid/upstream';
     final builder = MqttClientPayloadBuilder();
-    // Use utf8.encode to get bytes and add them explicitly
     final List<int> bytes = utf8.encode(jsonEncode(packet.toJson()));
     for (var b in bytes) {
       builder.addByte(b);
@@ -57,6 +67,17 @@ class MqttService {
 
   void _onDisconnected() {
     print('MQTT Disconnected');
+    connectionState.value = MqttConnectionState.disconnected;
+  }
+
+  void _onConnected() {
+    print('MQTT Connected');
+    connectionState.value = MqttConnectionState.connected;
+    lastSuccess = DateTime.now();
+  }
+
+  void _onSubscribed(String topic) {
+    print('MQTT Subscribed to $topic');
   }
 
   Stream<List<MqttReceivedMessage<MqttMessage>>>? get messages => _client?.updates;

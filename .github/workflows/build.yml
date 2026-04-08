@@ -95,7 +95,7 @@ jobs:
           python3 patch_gradle.py
 
       - name: Install dependencies
-        run: flutter pub add flutter_local_notifications uuid app_links qr_flutter installed_apps shared_preferences flutter_notification_listener mqtt_client device_info_plus qr_code_scanner permission_handler
+        run: flutter pub add flutter_local_notifications uuid app_links qr_flutter installed_apps shared_preferences flutter_notification_listener mqtt_client device_info_plus qr_code_scanner permission_handler connectivity_plus
 
       - name: Patch Plugin Namespaces & JVM
         run: |

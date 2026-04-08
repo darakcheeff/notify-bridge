@@ -17,6 +17,7 @@ import 'models/packet.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 final FilteringEngine filteringEngine = FilteringEngine();
@@ -103,7 +104,30 @@ Future<void> main() async {
     _showPersistentNotification(); // Ensure foreground service is alive
   }
 
+  // Request Battery Optimization Exemption on first run
+  if (isFirstRun) {
+    _requestBatteryOptimizationExemption();
+  }
+
+  // Listen for connectivity changes
+  Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+    if (result != ConnectivityResult.none && currentGuid.isNotEmpty) {
+      if (mqttService == null || mqttService!.connectionState.value != MqttConnectionState.connected) {
+        _initMqtt(currentGuid);
+      }
+    }
+  });
+
   runApp(const MyApp());
+}
+
+Future<void> _requestBatteryOptimizationExemption() async {
+  if (Platform.isAndroid) {
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    if (!status.isGranted) {
+       await Permission.ignoreBatteryOptimizations.request();
+    }
+  }
 }
 
 Future<String> _getDeviceModel() async {
@@ -456,6 +480,8 @@ class _HomeTabState extends State<HomeTab> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              _buildConnectionStatus(),
+              const SizedBox(height: 20),
               const Text('Настройки Сервера', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Имя этого устройства (напр. mha-l29)")),
               Row(
@@ -566,6 +592,66 @@ class _HomeTabState extends State<HomeTab> {
         ),
       ),
     );
+  }
+
+  Widget _buildConnectionStatus() {
+    if (mqttService == null) {
+      return const Card(
+        color: Colors.grey,
+        child: ListTile(
+          leading: Icon(Icons.cloud_off, color: Colors.white),
+          title: Text("Группа не создана", style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+
+    return ValueListenableBuilder<MqttConnectionState>(
+      valueListenable: mqttService!.connectionState,
+      builder: (context, state, _) {
+        Color color = Colors.grey;
+        String statusText = "Отключено";
+        IconData icon = Icons.cloud_off;
+
+        switch (state) {
+          case MqttConnectionState.connected:
+            color = Colors.green;
+            statusText = "Подключено";
+            icon = Icons.cloud_done;
+            break;
+          case MqttConnectionState.connecting:
+            color = Colors.orange;
+            statusText = "Подключение...";
+            icon = Icons.cloud_queue;
+            break;
+          case MqttConnectionState.faulted:
+          case MqttConnectionState.disconnected:
+            color = Colors.red;
+            statusText = "Ошибка подключения";
+            icon = Icons.cloud_off;
+            break;
+          default:
+            break;
+        }
+
+        String lastSuccess = mqttService!.lastSuccess != null
+            ? "Последнее удачное: ${_formatDateTime(mqttService!.lastSuccess!)}"
+            : "Нет данных о подключении";
+
+        return Card(
+          color: color.withOpacity(0.1),
+          shape: RoundedRectangleBorder(side: BorderSide(color: color, width: 2), borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            leading: Icon(icon, color: color, size: 32),
+            title: Text(statusText, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
+            subtitle: Text(lastSuccess, style: const TextStyle(fontSize: 12)),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')} ${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}";
   }
 }
 
