@@ -110,8 +110,8 @@ Future<void> main() async {
   }
 
   // Listen for connectivity changes
-  Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
-    if (result != ConnectivityResult.none && currentGuid.isNotEmpty) {
+  Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+    if (results.isNotEmpty && results.any((r) => r != ConnectivityResult.none) && currentGuid.isNotEmpty) {
       if (mqttService == null || mqttService!.connectionState.value != MqttConnectionState.connected) {
         _initMqtt(currentGuid);
       }
